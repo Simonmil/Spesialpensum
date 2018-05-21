@@ -227,20 +227,9 @@ void Significance_Optimization(double Lumi_scalefactor = 1.00){
   //-- Get histograms from the files (higgs, zz and data)
   TH1D *h_sig, *h_bgr, *h_data;
   printf ("\n  INFO: Mass distribution in the 4 lepton channel\n");
-  h_sig  = GetMassDistribution(125);
-  h_bgr  = GetMassDistribution(1);
-  h_data = GetMassDistribution(2);
-
-  
-  // scale histograms to required luminosity
-  TH1D *h_sig_plus_bgr = (TH1D*)h_bgr->Clone("h_sig_plus_bgr"); h_sig_plus_bgr->Reset();
-  Int_t Nbins = h_bgr->GetNbinsX();
-  for(int i_bin = 1; i_bin <= Nbins; i_bin++){
-    h_sig->SetBinContent(i_bin, Lumi_scalefactor*h_sig->GetBinContent(i_bin));
-    h_bgr->SetBinContent(i_bin, Lumi_scalefactor*h_bgr->GetBinContent(i_bin));
-    h_sig_plus_bgr->SetBinContent(i_bin, h_sig->GetBinContent(i_bin)+h_bgr->GetBinContent(i_bin));
-  }
-  
+  h_sig  = GetMassDistribution(125, Lumi_scalefactor);
+  h_bgr  = GetMassDistribution(1, Lumi_scalefactor);
+  h_data = GetMassDistribution(2, Lumi_scalefactor);
 
   //-------------------------------------------------------
   //-- [2] Compute significance for various mass windows
@@ -252,14 +241,6 @@ void Significance_Optimization(double Lumi_scalefactor = 1.00){
   TH1D *h_masswindow          = new TH1D("h_masswindow","",250,0.,25.);           // make a mass window - full width between 0 and 25 GeV
   TH1D *h_masswindow_expected = new TH1D("h_masswindow_expected","",250,0.,25.);  // histogram to hold results for expected
   TH1D *h_masswindow_observed = new TH1D("h_masswindow_observed","",250,0.,25.);  // histogram to hold results for observed
-
-  // loop over various mass window options
-
-  double mass_central = 125.;
-  double masswindow_expected_optimal    = 0.00;
-  double masswindow_observed_optimal    = 0.00;
-  double significance_expected_optimal  = 0.00;
-  double significance_observed_optimal  = 0.00;
 
   //---------------------------------
   //-- Loop over various mass windows
@@ -273,66 +254,27 @@ void Significance_Optimization(double Lumi_scalefactor = 1.00){
     //-- [a] determine the number of events in the mass window for each event type
     //       Ndata_win, Nbgr_win and Nsig_win
 
-    int Bin_low = h_data->FindBin(mass_central - 0.5*masswindow_fullwidth);
-    int Bin_up = h_data->FindBin(mass_central + 0.5*masswindow_fullwidth);
-    double Ndata_win = h_data->Integral(Bin_low,Bin_up);
-    double Nbgr_win = h_bgr->Integral(Bin_low,Bin_up);
-    double Nsig_win = h_sig->Integral(Bin_low,Bin_up);
-    double Nsig_plus_bgr_win = Nsig_win + Nbgr_win;
+    //-- [b] compute EXPECTED significance and save in histogram
+    double pvalue_expected       = 0.75; // you need to do this yourself
+    double significance_expected = ROOT::Math::gaussian_quantile_c(pvalue_expected,1);
+    h_masswindow_expected->SetBinContent(i_bin, significance_expected);
 
-    //-- compute EXPECTED significance and save in histogram
-    double pvalue_expected       = IntegratePoissonFromRight(Nbgr_win,(int)Nsig_plus_bgr_win); // you need to do this yourself
-    double significance_expected = 0.00;
-    if( (1.000-pvalue_expected) < 1e-12 || pvalue_expected < 1e-12){
-      printf(" undef expected pvalue -> put significance to zero\n");
-    } else{
-      significance_expected = ROOT::Math::gaussian_quantile_c(pvalue_expected,1);
-    }
-    // save optimal values
-    if(significance_expected > significance_expected_optimal){
-      significance_expected_optimal = significance_expected;
-      masswindow_expected_optimal = masswindow_fullwidth;
-    }
-    h_masswindow_expected->SetBinContent(i_bin,significance_expected);
-
-    //--  compute OBSERVED significance and save in histogram
-    double pvalue_observed       = IntegratePoissonFromRight(Nbgr_win,(int)Ndata_win); // you need to do this yourself
-    double significance_observed = 0.00;
-    if( (1.000-pvalue_observed) < 1e-12 || pvalue_observed < 1e-12){
-      printf("udef observed pvalue -> put sig to 0.00\n");
-    } else {
-      significance_observed = ROOT::Math::gaussian_quantile_c(pvalue_observed,1);
-    }
-    // save optimal values
-    if(significance_observed > significance_observed_optimal){
-      significance_observed_optimal = significance_observed;
-      masswindow_observed_optimal = masswindow_fullwidth;
-    }
+    //-- [c] compute OBSERVED significance and save in histogram
+    double pvalue_observed       = 0.25; // you need to do this yourself
+    double significance_observed = ROOT::Math::gaussian_quantile_c(pvalue_observed,1);
     h_masswindow_observed->SetBinContent(i_bin, significance_observed);
 
-
-    //printing
-    printf(" Window: (%5.2f) %4.1f < mh < %4.1f || b = %5.2f s = %5.2f | s+b = %5.2f d = %d \n",masswindow_fullwidth,mass_central - 0.5*masswindow_fullwidth, mass_central + 0.5*masswindow_fullwidth, Nbgr_win, Nsig_win,Nsig_plus_bgr_win, (int)Ndata_win);
-    printf("  ||  siginf = %5.2f(%5.2f) sigma exp(obs) \n", significance_expected, significance_observed);
+    printf("           expected significance = 1.000 || observed significance = 1.000 \n");
 
   } // end loop over width mass window
 
   //-- print optimum to the screen
   //
-  printf("\n");
-  printf("  --------------\n");
-  printf("  Optimal mass window:\n");
-  printf("  --------------\n");
-  printf("Expected: optimal mass window (Lumi scale factor = %5.2f) = %5.2f GeV -> expected significance = %5.2f sigma \n",Lumi_scalefactor,masswindow_expected_optimal,significance_expected_optimal );
-  printf("Observed: optimal mass window (Lumi scale factor = %5.2f) = %5.2f GeV -> observed significance = %5.2f sigma \n",Lumi_scalefactor,masswindow_observed_optimal, significance_observed_optimal );
-  printf("\n");
 
 
   //----------------------------------
   //-- [3] Plot histogram and make gif
   //----------------------------------
-  
-
   TCanvas * canvas1 = new TCanvas( "canvas1","Standard Canvas",600,400);  
   canvas1->SetLeftMargin(0.125);
   canvas1->SetBottomMargin(0.125); 
@@ -389,50 +331,16 @@ void SideBandFit(int Irebin){
   h_data->Rebin(Irebin);
   printf(" INFO: Rebinning the histograms with a factor %d. Binwidth is now %5.2f GeV\n", Irebin, h_data->GetBinWidth(1));
 
-
-  // General variables
-  double m4l_bin      = 0.;
-  double Nobs_bin     = 0.;
-  double mean_bgr_bin = 0.;
-  int Nbins = h_data->GetNbinsX();
-
-  double loglik = 0;
-
   //-----------------------------------------
   //-- [2] Loop over scale factor (alpha_bgr)
   //-----------------------------------------
-  TH1D *h_scalefactor_bgr = new TH1D("h_scalefactor_bgr","",10000,0.1,3.1); // you'll want to put more here I guess
-  int Nbins_sf = h_scalefactor_bgr->GetNbinsX();
+  TH1D *h_scalefactor_bgr = new TH1D("h_scalefactor_bgr","",100,0.1,3.1); // you'll want to put more here I guess
   double scalefactor_bgr  = 1.00; 
-  for (int i_bin_sf = 1; i_bin_sf <= Nbins_sf; i_bin_sf++){
-    loglik = 1e-10;
-    scalefactor_bgr = h_scalefactor_bgr->GetBinCenter(i_bin_sf);
-
-
-    //Likelihood
-    for(int i_bin = 1; i_bin <=Nbins; i_bin++){
-      m4l_bin = h_data->GetBinCenter(i_bin);
-      Nobs_bin = h_data->GetBinContent(i_bin);
-      if(m4l_bin >= 150. && m4l_bin<= 400. ){
-        mean_bgr_bin = scalefactor_bgr * h_bgr->GetBinContent(i_bin);
-        if(mean_bgr_bin > 0.){
-          loglik += TMath::Log( TMath::Poisson( Nobs_bin,mean_bgr_bin));
-        } else {
-          printf("\n Warning: Mean expected bin content is zero for bin at mass %f\n", m4l_bin);
-          printf("Likelihood will be corrupted\n");
-        }
-      }
-    }
-
-    h_scalefactor_bgr->SetBinContent(i_bin_sf,-2.*loglik);
-  }
 
   //---------------------------------------------
   // [2a] Loop 1: loop over scalefactors in alpha
   //---------------------------------------------
-/*
-  TH1D *h_scalefactor_bgr_rescaled
-  for (int i_bin_sf = 1; i_bin_sf <=Nbins_sf; i_bin_sf++){
+  for (int i_bin_sf = 1; i_bin_sf <=h_scalefactor_bgr->GetNbinsX(); i_bin_sf++){
 
     //-- determine the scale factor for the background
     scalefactor_bgr = h_scalefactor_bgr->GetBinCenter(i_bin_sf);
@@ -449,73 +357,22 @@ void SideBandFit(int Irebin){
 
     h_scalefactor_bgr->SetBinContent(i_bin_sf,-2.*loglik);   
   } // end loop over scale factors for the background
-  */
+
 
     //----------------------------------------------------
     //-- [3] Interpret the -2Log (Likelihood distribution)
     //----------------------------------------------------
     TH1D *h_scalefactor_bgr_rescaled  = (TH1D*) h_scalefactor_bgr->Clone("h_scalefactor_bgr_rescaled");  
-    h_scalefactor_bgr_rescaled->Reset();
-    double min2loglik = 0;
-    double min2loglik_min = 1e90;
-    double scalefactor_bgr_best = -999;   
+    h_scalefactor_bgr_rescaled->Reset();   
     
     //-- Find minimum
-    for (int i_bin_sf = 1; i_bin_sf <= Nbins_sf; i_bin_sf++){
-      min2loglik = h_scalefactor_bgr->GetBinContent(i_bin_sf);
-      if(min2loglik < min2loglik_min){
-        min2loglik_min = min2loglik;
-        scalefactor_bgr_best = h_scalefactor_bgr->GetBinCenter(i_bin_sf);
-      }
-    }
+    // todo
 
     //--Rescale and find +/- 1 sigma errors
-    double left_threshold = -1;
-    double right_threshold = -1;
-    for(int i_bin_sf = 1; i_bin_sf <= Nbins_sf; i_bin_sf++){
-      h_scalefactor_bgr_rescaled->SetBinContent(i_bin_sf, h_scalefactor_bgr->GetBinContent(i_bin_sf) - min2loglik_min);
-      if(left_threshold < 0. && h_scalefactor_bgr_rescaled->GetBinContent(i_bin_sf) < 1.000){
-        left_threshold = h_scalefactor_bgr->GetBinCenter(i_bin_sf);
-      }
-      if( left_threshold > 0. && right_threshold < 0. && h_scalefactor_bgr_rescaled->GetBinContent(i_bin_sf) > 1.000){
-        right_threshold = h_scalefactor_bgr->GetBinCenter(i_bin_sf);
-      }
-    }
+    // todo
 
     //-- print summary to screen
-    double error_left = scalefactor_bgr_best - left_threshold;
-    double error_right = right_threshold - scalefactor_bgr_best;
-
-    printf("------------\n");
-    printf("Result fit: \n");
-    printf("------------\n");
-    printf("Background scale factor from sideband fit = %5.2f -%5.2f +%5.2f\n",scalefactor_bgr_best, error_left, error_right );
-    printf("\n");
-
-  // Plot histgram and make gif
-  TCanvas * canvas1 = new TCanvas("canvas1","Standard Canvas",600,400);
-  canvas1->SetLeftMargin(0.175);
-  canvas1->SetBottomMargin(0.125);
-  canvas1->cd();
-  h_scalefactor_bgr_rescaled->Draw();
-  canvas1->Print("./SideBandFit.gif")
-
-  
-  double mass_central = 125.;
-  double masswindow_fullwidth = 7.15;
-  int Bin_low = h_data->FindBin(mass_central - 0.5*masswindow_fullwidth);
-  int Bin_up = h_data->FindBin(mass_central + 0.5*masswindow_fullwidth);
-  double Nbgr_unscaled = h_bgr->Integral(Bin_low,Bin_up);
-  double Nbgr_scaled = scalefactor_bgr_best * Nbgr_unscaled;
-  double Nbgr_scaled_lowererror = error_left * Nbgr_unscaled;
-  double Nbgr_scaled_uppererror = error_right * Nbgr_unscaled;
-
-  printf("------------------\n");
-  printf("SM background in mass window: width = %5.2f\n", masswindow_fullwidth);
-  printf("------------------\n");
-  printf("Unscaled: Nbgr = %5.2f\n", Nbgr_unscaled);
-  printf("Scaled: Nbgr = %5.2f -%5.2f +%5.2f\n", Nbgr_scaled, Nbgr_scaled_lowererror, Nbgr_scaled_uppererror);
-  printf("\n");
+    // todo
 
   return;
 
