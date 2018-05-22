@@ -527,7 +527,7 @@ void SideBandFit(int Irebin){
 
 
 //=========================================================================================
-double Get_TestStatistic(TH1D *h_mass_dataset, TH1D *h_template_bgr, TH1D *h_template_sig){
+double Get_TestStatistic(TH1D *h_mass_dataset = GetMassDistribution(2,1.0), TH1D *h_template_bgr = GetMassDistribution(1,1.0), TH1D *h_template_sig = GetMassDistribution(125,1.0)){
 //=========================================================================================
   printf(" dummy = %d\n",h_mass_dataset->GetNbinsX() + h_template_bgr->GetNbinsX() + h_template_sig->GetNbinsX());
    
