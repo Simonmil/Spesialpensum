@@ -47,6 +47,7 @@ void MassPlot(int Irebin = 20);
 void SideBandFit(int Irebin = 10);
 double Get_TestStatistic(TH1D *h_mass_dataset, TH1D *h_template_bgr, TH1D *h_template_sig);
 TH1D * GenerateToyDataSet(TH1D *h_mass_template);
+double ExpectedSignificance_ToyMC(double b = 1.0, double s = 10., double db = 0.0, double Ntoy = 1e6, int Iplot = 0);
 
 //-- some fusefull functions
 double IntegratePoissonFromRight(double mu, int N_obs);
@@ -498,7 +499,7 @@ void SideBandFit(int Irebin){
   canvas1->SetBottomMargin(0.125);
   canvas1->cd();
   h_scalefactor_bgr_rescaled->Draw();
-  canvas1->Print("./SideBandFit.gif")
+  canvas1->Print("./SideBandFit.gif");
 
   
   double mass_central = 125.;
@@ -530,16 +531,28 @@ double Get_TestStatistic(TH1D *h_mass_dataset, TH1D *h_template_bgr, TH1D *h_tem
 //=========================================================================================
   printf(" dummy = %d\n",h_mass_dataset->GetNbinsX() + h_template_bgr->GetNbinsX() + h_template_sig->GetNbinsX());
    
-  double test_statistic = 0.;
+  int Nbins = h_mass_dataset->GetNbinsX();
+  double massrange_fit_min = 100.;
+  double massrange_fit_max = 400.;
 
   //-- do likelihood fit
-  //for (int i_bin = 1; i_bin <= Nbins; i_bin++){
-      // loglik_bgr +=  // likelihood for the mu=0 (b-only) scenario
-      // loglik_sig_plus_bgr +=  // likelihood for the mu=1 (s+b) scenario
-  //} // end loop over bins
+  double loglik_bgr           = 0.;
+  double loglik_sig_plus_bgr  = 0.;
+  for (int i_bin = 1; i_bin <= Nbins; i_bin++){
+    double mass_bin = h_mass_dataset->GetBinCenter(i_bin);
+    double Nobs_bin = h_mass_dataset->GetBinContent(i_bin);
+    double mu_bgr_bin = h_template_bgr->GetBinContent(i_bin);
+    double mu_sig_bin = h_template_sig->GetBinContent(i_bin);
+    if((mass_bin >= massrange_fit_min && mass_bin <= massrange_fit_max)){
+      loglik_bgr +=           TMath::Log( TMath::Poisson(Nobs_bin, mu_bgr_bin + 0.0 * mu_sig_bin)); // likelihood for the mu=0 (b-only) scenario
+      loglik_sig_plus_bgr +=  TMath::Log( TMath::Poisson(Nobs_bin, mu_bgr_bin + 1.0 * mu_sig_bin)); // likelihood for the mu=1 (s+b) scenario
+    }
+  } // end loop over bins
  
   //-- compute test statistic
-  //double test_statistic  =  // find this out yourself
+  double test_statistic  =  -2. * (loglik_sig_plus_bgr - loglik_bgr);
+
+  printf(" test_statistic = %5.2f\n", test_statistic);
 
   //-- return test_statistic
   return test_statistic;
@@ -573,7 +586,101 @@ TH1D * GenerateToyDataSet(TH1D *h_mass_template){
 
 
 
+//============================================
+double ExpectedSignificance_ToyMC(double b = 1.0, double s = 10., double db = 0.0, double Ntoy = 1e6, int Iplot = 0){
+//============================================  
 
+
+
+  // Standard stuff
+  gROOT->Clear();
+  gROOT->Delete();
+
+
+  // Define histograms for number of events
+  TH1D* h_Nbgr          = new TH1D("h_Nbgr",          "Number of background events        ", 500, -0.5, 499.5);
+  TH1D* h_Nsig_plus_bgr = new TH1D("h_Nsig_plus_bgr", "Number of signal + background events", 500, -0.5, 499.5);
+
+  // Toy experiments
+  TRandom3 *R = new TRandom3();
+
+
+  for(int i_toy = 0; i_toy < Ntoy; i_toy++){
+
+    // Determine for this experiment the mean of the Poissons for b-only and s+b
+    double mean_b = R->Gaus(b, db);
+    double mean_splusb = R->Gaus(b, db) + s;
+
+    // compute number of observed events in this experiment
+    if(mean_b >= 0. && mean_splusb >= 0.){ // only throw Poisson if mean is positive
+      double b_toy = R->Poisson(mean_b);
+      double splusb_toy = R->Poisson(mean_splusb);
+
+      h_Nbgr->Fill(b_toy);
+      h_Nsig_plus_bgr->Fill(splusb_toy);
+    }
+    else{
+      printf("the mean of b and s+b is less than zero, disregaring toy\n");
+    }
+    if ((i_toy%100000) == 0 && Iplot){ cout << "ExpectedSignificance(): Toy " << i_toy << " out of " << Ntoy << endl;}
+  }
+
+
+  // Compute p-values for median signal + background experiment
+
+  double Nevts_median_splusb =s+b;
+  double pvalue = IntegrateFromRight(h_Nbgr,Nevts_median_splusb); // Integrate #events for background from median
+  double gauss_nsigma = ROOT::Math::gaussian_quantile_c(pvalue, 1);
+
+  printf("p_value = %5.2e  ->   %5.2f sigma \n", pvalue, gauss_nsigma);
+
+  if(Iplot == 1){
+    TCanvas * canvas1 = new TCanvas("canvas1", "Standard Canvas", 600, 400);
+    canvas1->SetLeftMargin(0.125);
+    canvas1->SetBottomMargin(0.125);
+
+
+    // Create separate histogram with excess
+    TH1D* h_Nbgr_excess = (TH1D*)h_Nbgr->Clone("h_Nbgr_excess"); h_Nbgr_excess->Reset();
+    for(int i_bin = 1; i_bin < h_Nbgr->GetNbinsX(); i_bin++){
+      if(h_Nbgr->GetBinCenter(i_bin) >= (int)Nevts_median_splusb){
+        h_Nbgr_excess->SetBinContent(i_bin,h_Nbgr->GetBinContent(i_bin));
+      }
+    }
+
+
+    double Ymax_plot = 1.30 * h_Nbgr->GetBinContent(h_Nbgr->GetMaximumBin());
+    h_Nbgr->SetAxisRange(0.,(s+b+15.),"X");
+    h_Nbgr->SetAxisRange(0.,Ymax_plot,"Y");
+    h_Nbgr->Draw("hist");
+    h_Nbgr_excess->SetFillColor(2);
+    h_Nbgr_excess->Draw("hist same");
+    h_Nsig_plus_bgr->SetLineStyle(2);
+    h_Nsig_plus_bgr->Draw("same");
+
+    // Add axis labels
+
+    AddText(0.900, 0.035, "Number of events", 0.060,0.,"right"); // X-axis
+    AddText(0.040, 0.900, "Number of toy-experiments", 0.060, 90.,"right"); // Y-axis
+
+
+    // Add Significance
+    AddText(0.225, 0.825, "background-only", 0.050, 0., "left");
+    AddText(0.225, 0.775, "experiments", 0.050, 0., "left");
+
+    AddText(0.550, 0.825, "Signal+background", 0.050, 0.,"left");
+    AddText(0.550, 0.775, "experiments", 0.050, 0.,"left");
+
+    AddText(0.625, 0.675, Form("p-value = %7.2e", pvalue), 0.050, 0., "left");
+    AddText(0.625, 0.625, Form("signif. = %5.2f sigma", gauss_nsigma), 0.050, 0.,"left");
+
+    canvas1->Print("ExpectedSignificance_ToyMC.gif");
+
+
+  }
+
+  return pvalue;
+}
 
 
 
