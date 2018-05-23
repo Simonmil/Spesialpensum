@@ -527,7 +527,7 @@ void SideBandFit(int Irebin){
 
 
 //=========================================================================================
-double Get_TestStatistic(TH1D *h_mass_dataset = GetMassDistribution(2,1.0), TH1D *h_template_bgr = GetMassDistribution(1,1.0), TH1D *h_template_sig = GetMassDistribution(125,1.0)){
+double Get_TestStatistic(TH1D *h_mass_dataset = GenerateToyDataSet(GetMassDistribution(2,1.0)), TH1D *h_template_bgr = GetMassDistribution(1,1.0), TH1D *h_template_sig = GetMassDistribution(125,1.0)){
 //=========================================================================================
   printf(" dummy = %d\n",h_mass_dataset->GetNbinsX() + h_template_bgr->GetNbinsX() + h_template_sig->GetNbinsX());
    
@@ -570,21 +570,191 @@ TH1D * GenerateToyDataSet(TH1D *h_mass_template){
   // Goal: Generate Toy data set from input histogram
   // How:  dumb way -> draw random Poisson in each bin       
   //--------------------------------------------------
-  //TRandom3 *R = new TRandom3(0);
+  TRandom3 *R = new TRandom3(0);
 
   //-- Create new histogram for the data-set
   TH1D *h_mass_toydataset = (TH1D*) h_mass_template->Clone("h_mass_toydataset"); h_mass_toydataset->Reset();
- 
+  int Nbins = h_mass_toydataset->GetNbinsX();
+
   //-- Loop over bins and draw Poisson number of event in each bin
-    
+  for(int i_bin = 1; i_bin <= Nbins; i_bin++){
+    double mu_bin = h_mass_template->GetBinContent(i_bin);
+    int Nevt_bin = R->Poisson(mu_bin);
+    h_mass_toydataset->SetBinContent(i_bin, Nevt_bin);
+  }
+
   //-- return histogram of toy data-set
   return h_mass_toydataset;
   
 } // end GenerateToyDataSet()
 
+/*
+void Significance_LikelihoodRatio_ToyMC(int Ntoys = 100){
+  TRandom3 *R = new TRandom3();
+
+  // Get mass distribution for the background
+  TH1D* h_bgr = GenerateToyDataSet(GetMassDistribution(1));
+
+  // Histogram that contain significances around 125 and 00 GeV (and the maximum one)
+  TH1D *h_significance_125 = new TH1D("h_significance_125", "significance 125", 1000., -6.0, 6.0);
+  TH1D *h_significance_175 = new TH1D("h_significance_175", "significance 175", 1000., -6.0, 6.0);
+  TH1D *h_significance_225 = new TH1D("h_significance_225", "significance 225", 1000., -6.0, 6.0);
+  TH1D *h_significance_275 = new TH1D("h_significance_275", "significance 275", 1000., -6.0, 6.0);
+  TH1D *h_significance_max = new TH1D("h_significance_max", "significance max", 1000., -6.0, 6.0);
+
+  // 10 GeV mass window 
+  double masswindow_fullwidth = 10.00;
+
+  int Bin_low_125 = h_bgr->FindBin(125.0 - 0.5*masswindow_fullwidth);
+  int Bin_up_125 = h_bgr->FindBin(125.0 + 0.5*masswindow_fullwidth);
+
+  int Bin_low_175 = h_bgr->FindBin(175.0 - 0.5*masswindow_fullwidth);
+  int Bin_up_175 = h_bgr->FindBin(175.0 + 0.5*masswindow_fullwidth);
+
+  int Bin_low_225 = h_bgr->FindBin(225.0 - 0.5*masswindow_fullwidth);
+  int Bin_up_225 = h_bgr->FindBin(225.0 + 0.5*masswindow_fullwidth);
+
+  int Bin_low_275 = h_bgr->FindBin(275.0 - 0.5*masswindow_fullwidth);
+  int Bin_up_275 = h_bgr->FindBin(275.0 + 0.5*masswindow_fullwidth);
+
+  double mean_Nbgr_win_125 = h_bgr->Integral(Bin_low_125, Bin_up_125);
+  double mean_Nbgr_win_175 = h_bgr->Integral(Bin_low_175, Bin_up_175);
+  double mean_Nbgr_win_225 = h_bgr->Integral(Bin_low_225, Bin_up_225);
+  double mean_Nbgr_win_275 = h_bgr->Integral(Bin_low_275, Bin_up_275);
 
 
+  // Generate toy datasets
 
+  // 125 GeV stuff
+  double b_toy_125          = 0.;
+  double significance_125 = 0.;
+  double pvalue_125         = 0.;
+  // 175 GeV stuff
+  double b_toy_175          = 0.;
+  double significance_175 = 0.;
+  double pvalue_175         = 0.;
+  // 225 GeV stuff
+  double b_toy_225          = 0.;
+  double significance_225 = 0.;
+  double pvalue_225         = 0.;
+  // 275 GeV stuff
+  double b_toy_275          = 0.;
+  double significance_275 = 0.;
+  double pvalue_275         = 0.;
+
+  // start loop over toys
+  for(int i_toy = 0; i_toy < Ntoys; i_toy++){
+
+    // toy at 125 GeV
+    b_toy_125 = R->Poisson(mean_Nbgr_win_125);
+    pvalue_125 = IntegratePoissonFromRight(mean_Nbgr_win_125, (int)b_toy_125);
+    if( (1.000-pvalue_125) < 1e-12){ significance_125 = -5.;} else if ( pvalue_125 < 1e-12){significance_125 = 5.;}
+    else { significance_125 = ROOT::Math::gaussian_quantile_c(pvalue_125,1);}
+    h_significance_125->Fill(significance_125);
+
+    // toy at 175 GeV
+    b_toy_175 = R->Poisson(mean_Nbgr_win_175);
+    pvalue_175 = IntegratePoissonFromRight(mean_Nbgr_win_175, (int)b_toy_175);
+    if( (1.000-pvalue_175) < 1e-12){ significance_175 = -5.;} else if ( pvalue_175 < 1e-12){significance_175 = 5.;}
+    else { significance_175 = ROOT::Math::gaussian_quantile_c(pvalue_175,1);}
+    h_significance_175->Fill(significance_175);
+
+    // toy at 225 GeV
+    b_toy_225 = R->Poisson(mean_Nbgr_win_225);
+    pvalue_225 = IntegratePoissonFromRight(mean_Nbgr_win_225, (int)b_toy_225);
+    if( (1.000-pvalue_225) < 1e-12){ significance_225 = -5.;} else if ( pvalue_225 < 1e-12){significance_225 = 5.;}
+    else { significance_225 = ROOT::Math::gaussian_quantile_c(pvalue_225,1);}
+    h_significance_225->Fill(significance_225);
+
+    // toy at 275 GeV
+    b_toy_275 = R->Poisson(mean_Nbgr_win_275);
+    pvalue_275 = IntegratePoissonFromRight(mean_Nbgr_win_275, (int)b_toy_275);
+    if( (1.000-pvalue_275) < 1e-12){ significance_275 = -5.;} else if ( pvalue_275 < 1e-12){significance_275 = 5.;}
+    else { significance_275 = ROOT::Math::gaussian_quantile_c(pvalue_275,1);}
+    h_significance_275->Fill(significance_275);
+
+    // Find Maximum significance of 125 and 200
+
+    double sig_max1 = (significance_125 > significance_175) ? significance_125 : significance_175;
+    double sig_max2 = (significance_225 > significance_275) ? significance_225 : significance_275;
+    double significance_max = (sig_max1 > sig_max2) ? sig_max1 : sig_max2;
+
+    h_significance_max->Fill(significance_max);
+
+  }
+
+  // Prepare plots
+  h_significance_125->SetLineColor(1);
+  h_significance_175->SetLineColor(2);
+  h_significance_225->SetLineColor(3);
+  h_significance_275->SetLineColor(4);
+  h_significance_max->SetLineColor(8);
+
+  h_significance_125->Draw();
+  h_significance_175->Draw("same");
+  h_significance_225->Draw("same");
+  h_significance_275->Draw("same");
+  h_significance_max->Draw("same");
+
+  // compute what fraction of toys have a significance above 2 sigma
+
+  printf("\n");
+  printf(" Fraction above 2 sigma (125) = %6.4f\n", IntegrateFromRight(h_significance_125, 2.00));
+  printf(" Fraction above 2 sigma (175) = %6.4f\n", IntegrateFromRight(h_significance_175, 2.00));
+  printf(" Fraction above 2 sigma (225) = %6.4f\n", IntegrateFromRight(h_significance_225, 2.00));
+  printf(" Fraction above 2 sigma (275) = %6.4f\n", IntegrateFromRight(h_significance_275, 2.00));
+  printf(" Fraction above 2 sigma (max) = %6.4f\n", IntegrateFromRight(h_significance_max, 2.00));
+
+
+  // Find translation
+
+  TH1D *h_significance_tranlation = (TH1D*)h_significance_max->Clone("H_significance_tranlation"); h_significance_tranlation->Reset();
+  int Nbins = h_significance_max->GetNbinsX();
+  double fraction_2sigma = ROOT::Math::gaussian_cdf(-2.,1.,0.);
+  double new_2sigmapoint = -999.;
+  for(int i_bin = 1; i_bin < Nbins; i_bin++){
+    double gauss_nsigma_original = h_significance_max->GetBinCenter(i_bin);
+    double pvalue_new = IntegrateFromRight(h_significance_max, gauss_nsigma_original);
+    double gauss_nsigma_new = (pvalue_new < 1e-12 || pvalue_new > 1.-1e-12) ? 0. : ROOT::Math::gaussian_quantile_c(pvalue_new, 1);
+    h_significance_tranlation->SetBinContent(i_bin, gauss_nsigma_new);
+
+    if(new_2sigmapoint < 0. && pvalue_new < fraction_2sigma){
+      new_2sigmapoint = gauss_nsigma_original;
+    }
+  }
+
+  // option 2
+
+  double pvalue_new_2 = IntegrateFromRight(h_significance_max, 2.00);
+  double gauss_nsigma_new_2 = (pvalue_new_2 < 1e-12 || pvalue_new_2 > 1-1e-12) ? 0. : ROOT::Math::gaussian_quantile_c(pvalue_new_2, 1);
+
+
+  TCanvas * canvas1 = new TCanvas( "canvas1", "Standard Canvas", 600, 400);
+  canvas1->SetLeftMargin(0.125);
+  canvas1->SetBottomMargin(0.125);
+  canvas1->cd();
+  h_significance_tranlation->SetAxisRange(-2.,3.,"X");
+  h_significance_tranlation->Draw("chist");
+  AddText(0.900,0.035,"Local significance",0.060,0.,"right");
+  AddText(0.040,0.900,"Global significance",0.060,90.,"right");
+
+  canvas1->Print("Significance_LikelihoodRatio_ToyMC.gif");
+
+  return;
+
+}
+*/
+
+void Significance_LikelihoodRatio_ToyMC(int Ntoys = 100., int = 2.){
+  for(int toy = 1; toy < Ntoys; toy++){
+    TH1D* h_dataset = GenerateToyDataSet(GetMassDistribution(2));
+    TH1D* h_bgr = GenerateToyDataSet(GetMassDistribution(1));
+    TH1D* h_sig_plus_bgr = GenerateToyDataSet(GetMassDistribution(125));
+
+    Get_TestStatistic(h_dataset, h_bgr, h_sig_plus_bgr);
+  }
+  // Use Test Statistic to get a distribution for b-only and s+b for 10000 experiments. Call TS, calling Generate Toy Dataset inside. Use templates. 
+}
 
 //============================================
 double ExpectedSignificance_ToyMC(double b = 1.0, double s = 10., double db = 0.0, double Ntoy = 1e6, int Iplot = 0){
