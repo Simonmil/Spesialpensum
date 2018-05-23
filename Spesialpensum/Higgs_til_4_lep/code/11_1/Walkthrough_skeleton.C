@@ -47,6 +47,7 @@ void MassPlot(int Irebin = 20);
 void SideBandFit(int Irebin = 10);
 double Get_TestStatistic(TH1D *h_mass_dataset, TH1D *h_template_bgr, TH1D *h_template_sig);
 TH1D * GenerateToyDataSet(TH1D *h_mass_template);
+void Significance_LikelihoodRatio_ToyMC(double Ntoy, int n)
 double ExpectedSignificance_ToyMC(double b = 1.0, double s = 10., double db = 0.0, double Ntoy = 1e6, int Iplot = 0);
 
 //-- some fusefull functions
@@ -745,13 +746,13 @@ void Significance_LikelihoodRatio_ToyMC(int Ntoys = 100){
 }
 */
 
-void Significance_LikelihoodRatio_ToyMC(int Ntoys = 100., int = 2.){
+void Significance_LikelihoodRatio_ToyMC(double Ntoys = 100., int n = 2.){
   for(int toy = 1; toy < Ntoys; toy++){
     TH1D* h_dataset = GenerateToyDataSet(GetMassDistribution(2));
     TH1D* h_bgr = GenerateToyDataSet(GetMassDistribution(1));
     TH1D* h_sig_plus_bgr = GenerateToyDataSet(GetMassDistribution(125));
 
-    Get_TestStatistic(h_dataset, h_bgr, h_sig_plus_bgr);
+    double statistics = Get_TestStatistic(h_dataset, h_bgr, h_sig_plus_bgr);
   }
   // Use Test Statistic to get a distribution for b-only and s+b for 10000 experiments. Call TS, calling Generate Toy Dataset inside. Use templates. 
 }
